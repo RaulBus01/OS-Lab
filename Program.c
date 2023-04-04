@@ -10,11 +10,27 @@
 #include <time.h>
 #include <sys/sysmacros.h>
 #include <fcntl.h>
+#include <dirent.h>
+
 char choice[32];
-void regFileMenu(struct stat sb, char *argv[])
+void ParseFileInDir(DIR *dir, int counter)
+{
+  int k;
+  struct dirent *d;
+ char extension[2]=".c";
+  
+  while ((d = readdir(dir))!=NULL)
+  {
+    if(strcmp(d->d_name,extension))
+        counter++;
+    closedir(dir);
+  }
+  
+}
+void regFileMenu(struct stat sb, char *path)
 {
         
-    printf("Regular File %s \n", argv[1]);
+    printf("Regular File: %s \n", path);
     printf("Menu for regular file \n");
     printf("1. Read -n \n");
     printf("2. Size -d \n");
@@ -25,9 +41,9 @@ void regFileMenu(struct stat sb, char *argv[])
                   
            
 }
-void symFileMenu(struct stat sb, char *argv[])
+void symFileMenu(struct stat sb, char *path)
 {
-        printf("Symbolic Link %s \n", argv[1]);
+        printf("Symbolic Link: %s \n", path);
         printf("Menu for symbolic link \n");
         printf("1. Link name -n \n");
         printf("2. Delete link -l \n");
@@ -36,27 +52,55 @@ void symFileMenu(struct stat sb, char *argv[])
         printf("5. Access rights -a \n");
           
 }
+void DirFileMenu(DIR *dir,char *path)
+{
+    printf("Directory: %s \n",path);
+    printf("Menu for directory link \n");
+    printf("1. Directory name : -n \n");
+    printf("2. Size of the directory -d \n");
+    printf("3. Access rights -a \n");
+    printf("4. Total number of files with .c extension \n");
+}
 int main(int argc, char *argv[])
 {
     struct stat sb;
+    DIR *dir;
     
+    char path[256];
+    int nrCFiles=0;
+
+
            if (argc != 2) {
                fprintf(stderr, "Usage: %s <pathname>\n", argv[0]);
                exit(EXIT_FAILURE);
            }
-        
+
            if (lstat(argv[1], &sb) == -1) {
                perror("lstat");
+               
                exit(EXIT_FAILURE);
            }
+            strcpy(path,argv[1]);
            if (S_ISREG(sb.st_mode))
            {
-            regFileMenu(sb,&argv[1]);
+            
+            regFileMenu(sb,path);
            }
            if(S_ISLNK(sb.st_mode))
             {
-            symFileMenu(sb,&argv[1]);
+            symFileMenu(sb,path);
             }
+           if(S_ISDIR(sb.st_mode))
+            {
+                dir = opendir(path);
+                if(dir == NULL)
+                    {
+                        printf("Error could not open the directory");
+                    }
+                 DirFileMenu(dir,path);
+            }
+          
+
             scanf("%s",choice); 
             system("clear");
            
@@ -128,6 +172,31 @@ int main(int argc, char *argv[])
                             default:
                               printf("Invalid Operation %c\n",choice[i]); 
                               break;
+                        }
+                    }
+                    if(i!= 0 && S_ISDIR(sb.st_mode))
+                    {
+                        switch (tolower(choice[i]))
+                        {
+                        case 'n':
+                            printf("Directory name : %s \n",path);
+                            break;
+                        case 'd':
+                            struct stat sbNew2;
+                            stat(path,&sbNew2);
+                            printf("Size of the directory: %ld \n",sbNew2.st_size);
+                            break;
+                        case 'a':
+                            printf("Access rights %d \n",sb.st_uid);
+                            break;
+                        case 'c':
+                        printf("Total number of files with .c extension\n");
+                            ParseFileInDir(dir,nrCFiles);
+                            
+                            
+                            break;
+                        default:printf("Invalid option \n");
+                            break;
                         }
                     }
                 }
