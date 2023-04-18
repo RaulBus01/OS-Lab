@@ -24,6 +24,7 @@ int ParseFileInDir(DIR *dir)
   struct dirent *entry;
   struct stat file;
   regex_t extension;
+
     if(regcomp(&extension, ".c$", REG_EXTENDED))
     {
         printf("Error compiling the regular expression\n");
@@ -67,7 +68,7 @@ int ParseFileInDir(DIR *dir)
 void regFileMenu(struct stat sb, char *path)
 {
         
-    printf("Regular File: %s \n", path);
+    printf("\nRegular File: %s \n", path);
     printf("Menu for regular file \n");
     printf("1. Read: -n \n");
     printf("2. Size: -d \n");
@@ -80,7 +81,7 @@ void regFileMenu(struct stat sb, char *path)
 }
 void symFileMenu(struct stat sb, char *path)
 {
-        printf("Symbolic Link: %s \n", path);
+        printf("\nSymbolic Link: %s \n", path);
         printf("Menu for symbolic link \n");
         printf("1. Link name: -n \n");
         printf("2. Delete link: -l \n");
@@ -91,7 +92,7 @@ void symFileMenu(struct stat sb, char *path)
 }
 void dirFileMenu(DIR *dir,char *path)
 {
-    printf("Directory: %s \n",path);
+    printf("\nDirectory: %s \n",path);
     printf("Menu for directory file \n");
     printf("1. Directory name : -n \n");
     printf("2. Size of the directory: -d \n");
@@ -261,12 +262,44 @@ void wrongOption(char *validCommands,char *choice)
 void menuFunction(struct stat sb,char *path)
 {
     DIR *dir;
-    regex_t extension;
+    regex_t extension,extensionC;
     char *validCommands;
+
         if (S_ISREG(sb.st_mode))
         {
             //Call the regular file menu
             regFileMenu(sb,path);
+           
+           if(regcomp(&extensionC,".c$",REG_EXTENDED !=0))
+           {
+            printf("Error compiling .c regular expression \n");
+           }
+
+           if(regexec(&extensionC,path, 0, NULL, 0) == 0)
+           {
+                pid_t cpid = fork();
+                int wstatus;
+                if(cpid == -1)
+                {
+                    perror("Fork failure \n");
+                    exit(EXIT_FAILURE);
+
+
+                }
+                if(cpid == 0)
+                {
+                    //Child code
+                
+                    execlp("bash","bash","script.sh",path,"fileout.txt",NULL);
+                    printf("!GOOOD");
+                    exit(1);
+                    
+                     
+                }
+              
+
+           }
+
 
             //Assign the valid commands for the regular file
             validCommands = "-ndhmal";
@@ -275,7 +308,7 @@ void menuFunction(struct stat sb,char *path)
             if(regcomp(&extension,"^-[ndhmal]+$",REG_EXTENDED) != 0)
             {
                 
-                printf("Error compiling the regular expression");
+                printf("Error compiling the regular expression \n");
             }
             
         }
@@ -362,23 +395,28 @@ int main(int argc, char *argv[])
 {
     struct stat sb;
     // Check if the user has entered the path
-    if (argc != 2) 
+    if (argc < 2) 
     {
         fprintf(stderr, "Usage: %s <pathname>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-        // Check if the path is a valid file
-    if (lstat(argv[1], &sb) == -1) 
-    {
-        perror("lstat");
-        
-        exit(EXIT_FAILURE);
-    }
-    // Copy the path to the path variable
-    strcpy(path,argv[1]);
-    // Call the menu function
-    menuFunction(sb,path);
     
+    for(int i=1;i<=argc;i++)
+    {
+        // Check if the path is a valid file
+        if (lstat(argv[i], &sb) == -1) 
+        {
+            perror("lstat");
+            
+            exit(EXIT_FAILURE);
+        }
+        // Copy the path to the path variable
+        strcpy(path,argv[i]);
+         
+        // Call the menu function
+        menuFunction(sb,path);
+       
+    }
 
 
 }
