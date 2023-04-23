@@ -12,11 +12,12 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <regex.h>
-
+#include <sys/wait.h>
 
 
 char choice[32];
 char path[256];
+int nrFiles = 0;
 
 int ParseFileInDir(DIR *dir)
 {
@@ -103,25 +104,25 @@ void accessRights(struct stat sb)
 {
     printf("Access rights for owner: \n \n");
     if(sb.st_mode & S_IRUSR)
-        printf("Read permission for owner\n");
+        printf("->Read permission for owner\n");
     if(sb.st_mode & S_IWUSR)
-        printf("Write permission for owner\n");
+        printf("->Write permission for owner\n");
     if(sb.st_mode & S_IXUSR)
-        printf("Execute permission for owner\n");
+        printf("->Execute permission for owner\n");
     printf("\nAccess rights for group: \n \n");
     if(sb.st_mode & S_IRGRP)
-        printf("Read permission for group\n");
+        printf("->Read permission for group\n");
     if(sb.st_mode & S_IWGRP)
-        printf("Write permission for group\n");
+        printf("->Write permission for group\n");
     if(sb.st_mode & S_IXGRP)
-        printf("Execute permission for group\n");
+        printf("->Execute permission for group\n");
     printf("\nAccess rights for others: \n \n");
     if(sb.st_mode & S_IROTH)
-        printf("Read permission for others\n");
+        printf("->Read permission for others\n");
     if(sb.st_mode & S_IWOTH)
-        printf("Write permission for others\n");
+        printf("->Write permission for others\n");
     if(sb.st_mode & S_IXOTH)
-        printf("Execute permission for others\n");
+        printf("->Execute permission for others\n");
     
     printf("\n");
 
@@ -259,48 +260,60 @@ void wrongOption(char *validCommands,char *choice)
         }
         printf("\n");
 }
+void choiceFunction()
+{
+    // Get the choice from the user 
+        printf("\n Enter your choice:");
+        scanf("%s",choice);
+        // Clear the screen for a better user experience 
+        system("clear");
+        
+
+        printf("Your choice %s  \n",choice);
+}
 void menuFunction(struct stat sb,char *path)
 {
-    DIR *dir;
-    regex_t extension,extensionC;
-    char *validCommands;
-
+   
+   DIR *dir;
+   regex_t extension,extensionC;
+   char *validCommands;
+   
+   pid_t pid = fork();
+ if(pid == -1)
+ {
+    perror("Fork failure \n");
+    exit(EXIT_FAILURE);
+ }
+ if(pid == 0)
+ {
         if (S_ISREG(sb.st_mode))
         {
-            //Call the regular file menu
-            regFileMenu(sb,path);
-           
+           regFileMenu(sb,path);
            if(regcomp(&extensionC,".c$",REG_EXTENDED !=0))
            {
             printf("Error compiling .c regular expression \n");
            }
 
+
            if(regexec(&extensionC,path, 0, NULL, 0) == 0)
            {
-                pid_t cpid = fork();
-                int wstatus;
-                if(cpid == -1)
+              pid_t cpid = fork();
+              if(cpid == -1)
                 {
                     perror("Fork failure \n");
                     exit(EXIT_FAILURE);
-
-
                 }
-                if(cpid == 0)
-                {
-                    //Child code
-                
-                    execlp("bash","bash","script.sh",path,"fileout.txt",NULL);
-                    printf("!GOOOD");
-                    exit(1);
+               
+              if(cpid == 0)
+              {
+                // 2nd child for .c Files
+                execlp("bash","bash","script.sh",path,"fileout.txt",NULL);
+                printf("!GOOOD");
+                exit(1);
                     
-                     
-                }
-              
-
+              }  
            }
-
-
+           
             //Assign the valid commands for the regular file
             validCommands = "-ndhmal";
 
@@ -310,8 +323,9 @@ void menuFunction(struct stat sb,char *path)
                 
                 printf("Error compiling the regular expression \n");
             }
-            
+             
         }
+ 
 
         if(S_ISLNK(sb.st_mode))
         {
@@ -327,6 +341,7 @@ void menuFunction(struct stat sb,char *path)
                 
                 printf("Error compiling the regular expression");
             }
+        
         }
 
         if(S_ISDIR(sb.st_mode))
@@ -334,13 +349,35 @@ void menuFunction(struct stat sb,char *path)
             //Open the directory 
                 dir = opendir(path);
             //Check if the directory was opened correctly
-            if(dir == NULL)
+                 if(dir == NULL)
                 {
                     printf("Error could not open the directory");
                 }
                 //Call the directory file menu
                 dirFileMenu(dir,path);
+          
+                pid_t cpidDir = fork();
 
+                if(cpidDir == -1)
+                {
+                    printf("Fork failure \n");
+                    exit(EXIT_FAILURE);
+                }
+               char newFileName[255]="";
+                strcpy(newFileName,path);
+                strcat(newFileName,"_file.txt");
+                strcat(newFileName,"\0");
+                
+                if(cpidDir == 0)
+                {
+                    
+                    
+                   execlp("touch","touch",newFileName, NULL);
+
+                    printf("!GOOOD");
+                    exit(1);
+
+                }
                 //Assign the valid commands for the directory
                 validCommands = "-ndac";
                 //Compile the regular expression for the directory
@@ -349,19 +386,22 @@ void menuFunction(struct stat sb,char *path)
                     
                     printf("Error compiling the regular expression");
                 }
-                  
-               
               
-                
         }
-        // Get the choice from the user 
-        printf("Enter your choice: ");
-        scanf("%s",choice);
-        // Clear the screen for a better user experience 
-        system("clear");
-        
+    }
+ else
+{
+    int status;
+   
+  
+    waitpid(pid,&status,0);
+   
+      
+    exit(1);
+}
+        sleep(1);
+        choiceFunction();
 
-        printf("Your choice %s  \n",choice);
         // Check if the choice is valid
         if(regexec(&extension,choice,0,NULL,0) != 0)
         {
@@ -394,15 +434,17 @@ void menuFunction(struct stat sb,char *path)
 int main(int argc, char *argv[])
 {
     struct stat sb;
+    nrFiles = argc;
     // Check if the user has entered the path
-    if (argc < 2) 
+    if (nrFiles < 2) 
     {
         fprintf(stderr, "Usage: %s <pathname>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
     
-    for(int i=1;i<=argc;i++)
+    for(int i=1;i<nrFiles;i++)
     {
+       
         // Check if the path is a valid file
         if (lstat(argv[i], &sb) == -1) 
         {
