@@ -294,16 +294,17 @@ void menuFunction(struct stat sb,char *path)
             printf("Error compiling .c regular expression \n");
            }
 
-
+            //Regex to find the regular files that have .c extension
            if(regexec(&extensionC,path, 0, NULL, 0) == 0)
            {
+            //Create a child process
               pid_t cpid = fork();
               if(cpid == -1)
                 {
                     perror("Fork failure \n");
                     exit(EXIT_FAILURE);
                 }
-               
+            
               if(cpid == 0)
               {
                 // 2nd child for .c Files
@@ -355,7 +356,7 @@ void menuFunction(struct stat sb,char *path)
                 }
                 //Call the directory file menu
                 dirFileMenu(dir,path);
-          
+                //Create a 2nd child for directory process
                 pid_t cpidDir = fork();
 
                 if(cpidDir == -1)
@@ -363,6 +364,7 @@ void menuFunction(struct stat sb,char *path)
                     printf("Fork failure \n");
                     exit(EXIT_FAILURE);
                 }
+                //Obtain the name of the new file dirName_file.txt
                char newFileName[255]="";
                 strcpy(newFileName,path);
                 strcat(newFileName,"_file.txt");
@@ -370,14 +372,16 @@ void menuFunction(struct stat sb,char *path)
                 
                 if(cpidDir == 0)
                 {
-                    
+                    // 2nd child process 
                     
                    execlp("touch","touch",newFileName, NULL);
-
+                    
+                    // Code executed if execlp is wrong
                     printf("!GOOOD");
                     exit(1);
 
                 }
+
                 //Assign the valid commands for the directory
                 validCommands = "-ndac";
                 //Compile the regular expression for the directory
@@ -393,7 +397,7 @@ void menuFunction(struct stat sb,char *path)
 {
     int status;
    
-  
+    // Wait for all children to finish
     waitpid(pid,&status,0);
    
       
