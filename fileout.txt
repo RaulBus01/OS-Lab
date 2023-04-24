@@ -1,0 +1,22 @@
+File.c:2:2: error: invalid preprocessing directive #d_name
+    2 | #d_name asd
+      |  ^~~~~~
+File.c: In function ‘main’:
+File.c:5:5: error: ‘asdasdsk’ undeclared (first use in this function)
+    5 |     asdasdsk!
+      |     ^~~~~~~~
+File.c:5:5: note: each undeclared identifier is reported only once for each function it appears in
+File.c:5:13: error: expected ‘;’ before ‘!’ token
+    5 |     asdasdsk!
+      |             ^
+      |             ;
+File.c:7:12: error: ‘sad’ undeclared (first use in this function)
+    7 |     return sad
+      |            ^~~
+File.c:7:15: error: expected ‘;’ before ‘}’ token
+    7 |     return sad
+      |               ^
+      |               ;
+    8 | 
+    9 | }
+      | ~              
