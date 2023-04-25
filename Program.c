@@ -18,6 +18,7 @@
 char choice[32];
 char path[256];
 int nrFiles = 0;
+int optionForMenu = 0;
 
 int ParseFileInDir(DIR *dir)
 {
@@ -260,11 +261,35 @@ void wrongOption(char *validCommands,char *choice)
         }
         printf("\n");
 }
-void choiceFunction()
+void choiceFunction(struct stat sb,char* path)
 {
+    if(optionForMenu == 1)
+    {
+        regFileMenu(sb,path);
+    }
+    if(optionForMenu == 2)
+    {
+        symFileMenu(sb,path);
+    }
+    if(optionForMenu == 3)
+    {
+
+        DIR *dir;
+        //Open the directory 
+          dir = opendir(path);
+        //Check if the directory was opened correctly
+            if(dir == NULL)
+        {
+            printf("Error could not open the directory");
+        }
+
+        dirFileMenu(dir,path);
+    }
     // Get the choice from the user 
         printf("\n Enter your choice:");
+        sleep(1);
         scanf("%s",choice);
+        
         // Clear the screen for a better user experience 
         system("clear");
         
@@ -277,18 +302,11 @@ void menuFunction(struct stat sb,char *path)
    DIR *dir;
    regex_t extension,extensionC;
    char *validCommands;
-   
-   pid_t pid = fork();
- if(pid == -1)
- {
-    perror("Fork failure \n");
-    exit(EXIT_FAILURE);
- }
- if(pid == 0)
- {
+    //Option for menu 1 for Regular File | 2 for Symbolic Link File | 3 for Directory file
+
         if (S_ISREG(sb.st_mode))
         {
-           regFileMenu(sb,path);
+           optionForMenu = 1; // Option for Regular File  1
            if(regcomp(&extensionC,".c$",REG_EXTENDED !=0))
            {
             printf("Error compiling .c regular expression \n");
@@ -308,11 +326,13 @@ void menuFunction(struct stat sb,char *path)
               if(cpid == 0)
               {
                 // 2nd child for .c Files
+              
                 execlp("bash","bash","script.sh",path,"fileout.txt",NULL);
                 printf("!GOOOD");
                 exit(1);
                     
-              }  
+              }
+
            }
            
             //Assign the valid commands for the regular file
@@ -324,15 +344,15 @@ void menuFunction(struct stat sb,char *path)
                 
                 printf("Error compiling the regular expression \n");
             }
-             
+            
         }
  
 
         if(S_ISLNK(sb.st_mode))
         {
             //Call the link file menu
-            symFileMenu(sb,path);
-
+        
+            optionForMenu = 2;
             //Assign the valid commands for the link
             validCommands = "-nldta";
 
@@ -354,8 +374,9 @@ void menuFunction(struct stat sb,char *path)
                 {
                     printf("Error could not open the directory");
                 }
+                optionForMenu = 3;
                 //Call the directory file menu
-                dirFileMenu(dir,path);
+               
                 //Create a 2nd child for directory process
                 pid_t cpidDir = fork();
 
@@ -392,48 +413,69 @@ void menuFunction(struct stat sb,char *path)
                 }
               
         }
-    }
- else
-{
-    int status;
-   
-    // Wait for all children to finish
-    waitpid(pid,&status,0);
-   
-      
-    exit(1);
-}
-        sleep(1);
-        choiceFunction();
+    
+        pid_t pid = fork();
+        if(pid == -1)
+        {
+            printf("Fork error \n");
+            exit(EXIT_FAILURE);
 
-        // Check if the choice is valid
-        if(regexec(&extension,choice,0,NULL,0) != 0)
-        {
-            // Call the function that will print the invalid options
-           wrongOption(validCommands,choice);
-            // Recursive call to the menu function
-            menuFunction(sb,path);
-            // Reset the choice to empty string because the recurisve calls will print the choice again
-            strcpy(choice,"");
         }
-        int i = 0;
-        while(choice[i] != '\0') 
+        if(pid == 0)
         {
-            //Apply the functions that were choosen
+            choiceFunction(sb,path);
+
+            // Check if the choice is valid
+            if(regexec(&extension,choice,0,NULL,0) != 0)
+            {
+                // Call the function that will print the invalid options
+            wrongOption(validCommands,choice);
+                // Recursive call to the menu function
+                menuFunction(sb,path);
+                // Reset the choice to empty string because the recurisve calls will print the choice again
+                strcpy(choice,"");
+            }
+            int i = 0;
+            while(choice[i] != '\0') 
+            {
+                //Apply the functions that were choosen
+                
+                // Regular File Functions
+                regularFile(i,sb,path);
+
+                // Link File Function
+                linkFile(i,sb,path);
+
+                // Directory File Function
+
+                directoryFile(i,sb,path,dir);
+        
+                i++;
+        
+            }
+            exit(1);
+        }
+        else
+        {
             
-            // Regular File Functions
-            regularFile(i,sb,path);
-
-            // Link File Function
-            linkFile(i,sb,path);
-
-            // Directory File Function
-
-            directoryFile(i,sb,path,dir);
-    
-            i++;
-    
+           for(int k = 0; k < 2;k++)
+           {
+            int status;
+            pid_t w;
+            w=wait(&status);
+            if (w == -1)
+            {
+                printf("waitpid status %d",status);
+                exit(EXIT_FAILURE);
+            }
+          
+           }
+           
+         
+             
         }
+
+
 }
 int main(int argc, char *argv[])
 {
