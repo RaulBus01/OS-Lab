@@ -14,6 +14,7 @@
 #include <regex.h>
 #include <sys/wait.h>
 
+
 #define RED   "\x1B[31m"
 #define GRN   "\x1B[32m"
 #define YEL   "\x1B[33m"
@@ -38,7 +39,7 @@ int ParseFileInDir(DIR *dir)
 
     if(regcomp(&extension, ".c$", REG_EXTENDED))
     {
-        printf( RED "RError compiling the regular expression\n" RESET);
+        printf( RED "Error compiling the regular expression\n" RESET);
         exit(EXIT_FAILURE);
     }
  
@@ -340,6 +341,9 @@ void menuFunction(struct stat sb,char *path)
    DIR *dir;
    regex_t extension,extensionC;
    char *validCommands;
+   int pfd[2];
+  
+	
     //Option for menu: 1 for Regular File | 2 for Symbolic Link File | 3 for Directory file
 
         if (S_ISREG(sb.st_mode))
@@ -356,6 +360,13 @@ void menuFunction(struct stat sb,char *path)
             //Regex to find the regular files that have .c extension
            if(regexec(&extensionC,path, 0, NULL, 0) == 0)
            {
+         
+	        
+            if(pipe(pfd)<0)
+            {
+                printf("Pipe creation failed \n");
+                exit(1);
+            }
             //Create a child process
               pid_t cpid = fork();
                //Check if the fork function was called successfully
@@ -368,7 +379,11 @@ void menuFunction(struct stat sb,char *path)
                  pidCounter++;
               if(cpid == 0)
               {
-                
+                //close the reading end of the pipe
+                close(pfd[0]);
+
+                dup2(pfd[1],1);
+
                 //Call of  the script which write in the fileout.txt the errors and warnings from path
                 execlp("bash","bash","script.sh",path,"fileout.txt",NULL);
 
@@ -514,15 +529,28 @@ void menuFunction(struct stat sb,char *path)
         }
         else
         {   
-              
-              
+
+            
+            close(pfd[1]);
+            char buff[512];
+            int score;
+            read(pfd[0],buff,512);
+            for(int i=0;i!='\0';i++)
+            {
+                int countZero=0;
+                if(buff[i]=='0')
+                    countZero;
+
+                  
+            }
+           
            //Wait for all childs
            for(int k = 0; k <pidCounter;k++)
            {
             
             int status;
             pid_t w;
-        
+            
             w=wait(&status);
             //Check the return value of wait function
             if (w == -1)
@@ -532,9 +560,14 @@ void menuFunction(struct stat sb,char *path)
             }
             
            }
+            
+            
+           
+            close(pfd[0]);
+           
            // Reset number of childs for each argument 
            pidCounter=0;
-         
+
              
         }
 
