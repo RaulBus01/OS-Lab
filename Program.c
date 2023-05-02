@@ -335,6 +335,27 @@ void choiceFunction(struct stat sb,char* path)
         printf(BLU"Your choice %s  \n",choice);
         printf(RESET);
 }
+double getScore(int nrWarnings, int nrErrors)
+{   int score = 0;
+    if(nrWarnings == 0 && nrWarnings == 0)
+    {
+        score = 10;
+        
+    }
+    if(nrErrors >= 1)
+    {
+        score = 1;
+    }
+    if(nrErrors == 0 && nrWarnings > 10)
+    {
+        score = 2;
+    }
+     if(nrErrors == 0 && nrWarnings  <=10)
+    {
+        score = 2 + 8 * (10-nrWarnings) / 10;
+    }
+    return score;
+}
 void menuFunction(struct stat sb,char *path)
 {
    
@@ -342,7 +363,7 @@ void menuFunction(struct stat sb,char *path)
    regex_t extension,extensionC;
    char *validCommands;
    int pfd[2];
-  
+   int isCFile = 0;
 	
     //Option for menu: 1 for Regular File | 2 for Symbolic Link File | 3 for Directory file
 
@@ -361,14 +382,16 @@ void menuFunction(struct stat sb,char *path)
            if(regexec(&extensionC,path, 0, NULL, 0) == 0)
            {
          
-	        
+	      
             if(pipe(pfd)<0)
             {
                 printf("Pipe creation failed \n");
                 exit(1);
             }
+              
             //Create a child process
               pid_t cpid = fork();
+           
                //Check if the fork function was called successfully
               if(cpid == -1)
                 {
@@ -377,13 +400,22 @@ void menuFunction(struct stat sb,char *path)
                 }
                 //Increase the counter of children
                  pidCounter++;
+                 //Flag for checking if the file is a C file and to verify in the parent process
+                   isCFile = 1;
               if(cpid == 0)
               {
                 //close the reading end of the pipe
                 close(pfd[0]);
-
-                dup2(pfd[1],1);
-
+                
+                //Redirect the information from STDOUT to pipe
+                int newfd = dup2(pfd[1],1);
+                // Check if the dup2 call is succesful
+                if(newfd < 0)
+                {
+                    printf(RED"Error dup2 \n");
+                    exit(1);
+                }
+               
                 //Call of  the script which write in the fileout.txt the errors and warnings from path
                 execlp("bash","bash","script.sh",path,"fileout.txt",NULL);
 
@@ -530,19 +562,56 @@ void menuFunction(struct stat sb,char *path)
         else
         {   
 
-            
-            close(pfd[1]);
-            char buff[512];
-            int score;
-            read(pfd[0],buff,512);
-            for(int i=0;i!='\0';i++)
+            //If the file is a C file then
+            if(isCFile == 1)
             {
-                int countZero=0;
-                if(buff[i]=='0')
-                    countZero;
+                //Close the writing end of the pipe
+                close(pfd[1]);
+                //Buffer for the data from the reading end of the pipe
+                char buff[512],*ptr;
+                //Number of errors and warnings to be extracted from the buffer
+                int nrErrors,nrWarnings;
+                //Assign the number of readed bytes
+                int nrBytesRead = read(pfd[0],buff,512);
+                if(nrBytesRead > 0)
+                {
+                    //Termiante the string at the numbero of readed bytes
+                    buff[nrBytesRead]='\0'; 
+                    //Extract the numbers for erros and warnings in base 10
+                    nrErrors = strtol(buff, &ptr, 10);
+                    nrWarnings = strtol(ptr, NULL, 10);
+                    //Get the score using the function
+                    double score = getScore(nrWarnings,nrErrors);
+                    //Print the Number of Warnings and Errors and the score
+                    printf(RED"Warnings -> %d Errors -> %d \n",nrWarnings,nrErrors);
+                    printf(GRN"Your score: %.2f \n",score );
+                    printf(RESET);
 
-                  
+                
+                }
+            
+           else if (nrBytesRead == 0) //Check the special case
+            {
+                // The child process has closed the write end of the pipe
+                printf("Pipe closed by child process\n");
             }
+            else //Check the special case
+            {
+                // There was an error reading from the pipe
+                perror("Error reading from pipe");
+                exit(EXIT_FAILURE);
+            }
+            //Close the reading end of the pipe
+            close(pfd[0]);
+            
+            }
+           
+            
+         
+            
+           
+           
+
            
            //Wait for all childs
            for(int k = 0; k <pidCounter;k++)
@@ -550,7 +619,7 @@ void menuFunction(struct stat sb,char *path)
             
             int status;
             pid_t w;
-            
+           
             w=wait(&status);
             //Check the return value of wait function
             if (w == -1)
@@ -560,11 +629,6 @@ void menuFunction(struct stat sb,char *path)
             }
             
            }
-            
-            
-           
-            close(pfd[0]);
-           
            // Reset number of childs for each argument 
            pidCounter=0;
 
