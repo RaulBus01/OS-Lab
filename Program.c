@@ -174,7 +174,12 @@ void regularFile(int i, struct stat sb, char *fileName)
             case 'l':
                 printf("Introduce the name of the new link :\n");
                 char link[100];
-                scanf("%s",link);
+                if(scanf("%s",link) < 0 )
+                {
+                    printf(RED"Error scanf \n");
+                    printf(RESET);
+                }
+                
                 if(symlink(fileName,link) == -1)
                 {
                     printf(RED "Error creating the link" RESET);
@@ -221,8 +226,10 @@ void linkFile(int i, struct stat sb, char *fileName)
                  printf(RESET);
                 break;
             case 'a':
-                
+                 
+                 
                 accessRights(sb);
+
                  printf(RESET);
                 break;
             
@@ -275,7 +282,7 @@ void directoryFile(int i,struct stat sb,char *fileName, DIR *dir)
 }
 void wrongOption(char *validCommands,char *choice)
 {
-     int charIndex = 0;
+     int charIndex = 1;
      //Check if the first character is a dash if not print the error message
      if(choice[0] !='-')
         {
@@ -385,12 +392,13 @@ void menuFunction(struct stat sb,char *path)
 	      
             if(pipe(pfd)<0)
             {
-                printf("Pipe creation failed \n");
+                printf(RED"Pipe creation failed \n");
                 exit(1);
             }
               
             //Create a child process
-              pid_t cpid = fork();
+              pid_t cpid = fork();// Pentru fork 2 e nevoide ce close la pipe
+            
            
                //Check if the fork function was called successfully
               if(cpid == -1)
@@ -429,7 +437,7 @@ void menuFunction(struct stat sb,char *path)
            }
            
             //Assign the valid commands for the regular file
-            validCommands = "-ndhmal";
+            validCommands = "ndhmal";
 
             //Compile the regular expression for the regular file
             if(regcomp(&extension,"^-[ndhmal]+$",REG_EXTENDED) != 0)
@@ -448,7 +456,24 @@ void menuFunction(struct stat sb,char *path)
              //Setting the right option for symbolic Link Menu
             optionForMenu = 2;
             //Assign the valid commands for the link
-            validCommands = "-nldta";
+            validCommands = "nldta";
+
+            pid_t cpidLnk = fork();
+               if(cpidLnk == -1)
+            {
+                printf(RED "Fork failure \n" RESET);
+                exit(EXIT_FAILURE);     
+            }
+            pidCounter++;
+            if(cpidLnk == 0)
+            {
+                //Child code 
+               
+                //Change the target file access rights
+                execlp("chmod","chmod","-v","760",path,NULL);
+                 printf(RED"Not GOOOD" RESET);
+                exit(1);
+            }
 
             //Compile the regular expression for the link
             if(regcomp(&extension,"^-[nldta]+$",REG_EXTENDED) != 0)
@@ -457,6 +482,8 @@ void menuFunction(struct stat sb,char *path)
                 printf(RED "Error compiling the regular expression" RESET);
                 exit(EXIT_FAILURE);
             }
+             
+
         
         }
 
@@ -495,14 +522,14 @@ void menuFunction(struct stat sb,char *path)
                     execlp("bash","bash","scriptDirFile.sh",newFileName,NULL);
                    
                     // Code executed if execlp is wrong
-                    printf(RED "!GOOOD" RESET);
+                    printf(RED "Not GOOOD" RESET);
                     exit(1);
                    
                 }
                   
 
                 //Assign the valid commands for the directory
-                validCommands = "-ndac";
+                validCommands = "ndac";
                 //Compile the regular expression for the directory
                  if(regcomp(&extension,"^-[ndac]+$",REG_EXTENDED) != 0)
                 {
@@ -598,7 +625,7 @@ void menuFunction(struct stat sb,char *path)
             else //Check the special case
             {
                 // There was an error reading from the pipe
-                perror("Error reading from pipe");
+                printf(RED"Error reading from pipe\n");
                 exit(EXIT_FAILURE);
             }
             //Close the reading end of the pipe
@@ -619,13 +646,34 @@ void menuFunction(struct stat sb,char *path)
             
             int status;
             pid_t w;
-           
+           //
             w=wait(&status);
             //Check the return value of wait function
             if (w == -1)
             {
                 //printf("waitpid status %d",status);
                 exit(EXIT_FAILURE);
+            }
+            if (WIFEXITED(status)) 
+            {
+                printf(GRN"Exited  %d with the  status=%d\n",w, WEXITSTATUS(status));
+                printf(RESET);
+             } 
+             else if (WIFSIGNALED(status)) 
+             {
+                 printf(RED"Killed by signal %d\n", WTERMSIG(status));
+
+            }
+             else if (WIFSTOPPED(status)) 
+             {
+                printf(BLU"Stopped by signal %d\n", WSTOPSIG(status));
+                printf(RESET);
+
+             } 
+             else if (WIFCONTINUED(status)) 
+             {
+                 printf(BLU"Continued\n");
+                 printf(RESET);
             }
             
            }
