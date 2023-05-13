@@ -23,7 +23,7 @@
 #define CYN   "\x1B[36m"
 #define RESET "\x1B[0m"
 
-char choice[32];
+
 char path[256];
 
 int nrFiles = 0;
@@ -195,7 +195,7 @@ void regularFile(struct stat sb, char *fileName,char *options)
 
             break;
         default:
-           printf("Invalid Operation %c\n",choice[i]);
+           printf("Invalid Operation %c\n",options[i]);
             printf(RESET);
         
             break;
@@ -248,7 +248,7 @@ void linkFile(struct stat sb, char *fileName,char *options)
                 break;
             
             default:
-                printf(RED "Invalid Operation %c\n",choice[i]); 
+                printf(RED "Invalid Operation %c\n",options[i]); 
                  printf(RESET);
                 break;
         }
@@ -291,7 +291,7 @@ void directoryFile(char *options,struct stat sb,char *fileName, DIR *dir)
             printf(RESET);
                 break;
             default:
-                printf(RED "!Invalid option %c\n",choice[i]);
+                printf(RED "!Invalid option %c\n",options[i]);
                  printf(RESET);
                 break;
             }
@@ -345,7 +345,7 @@ int checkOptions(struct stat sb, char *options)
     return 1;
     
 }
-void printMenu(struct stat sb,char *fileName)
+void handleOptions(struct stat sb,char *fileName)
 {
     char options[100];
     if(S_ISREG(sb.st_mode))
@@ -372,14 +372,21 @@ void printMenu(struct stat sb,char *fileName)
     sleep(1);
     
     printf(BLU"Enter your options : "RESET);
-    scanf("%s",options);
+    
+    if(scanf("%s",options) <0)
+    {
+        printf(RED"Error reading the options\n");
+        printf(RESET);
+        exit(EXIT_FAILURE);
+    }
     system("clear");
+
     printf(GRN"\nOptions : %s\n",options);
     printf(RESET);
 
     if(checkOptions(sb,options) == 0)
     {
-        printMenu(sb,fileName);
+        handleOptions(sb,fileName);
         strcpy(options,"");
     }
     else
@@ -446,7 +453,7 @@ void menuFunction(struct stat sb,char *path)
         if (S_ISREG(sb.st_mode))
         {
             
-           
+           //Compile the regular expression for .c files
            if(regcomp(&extensionC,".c$",REG_EXTENDED !=0))
            {
             printf(RED"Error compiling .c regular expression \n"RESET);
@@ -523,7 +530,7 @@ void menuFunction(struct stat sb,char *path)
                 {
                     //Termiante the string at the numbero of readed bytes
                     buff[nrBytesRead] = '\0';
-                    printf("buff : %s \n",buff);
+                    
                     //Extract the numbers for erros and warnings in base 10
                     nrErrors = strtol(buff, &ptr, 10);
                     nrWarnings = strtol(ptr, NULL, 10);
@@ -531,9 +538,18 @@ void menuFunction(struct stat sb,char *path)
                     double score = getScore(nrWarnings,nrErrors);
                     //Print the Number of Warnings and Errors and the score
                     FILE *f = fopen("grades.txt","a");
+                    if(f == NULL)
+                    {
+                        printf(RED"Error opening the file grades.txt \n"RESET);
+                        exit(1);
+                    }
                     fprintf(f,"In file: %s found  %d warnings %d errors .The score is %.2f \n",path,nrWarnings,nrErrors,score);
                    
-                    fclose(f);
+                    if(fclose(f) != 0)
+                    {
+                        printf(RED"Error closing the file grades.txt \n"RESET);
+                        exit(1);
+                    }
 
                 
                 }
@@ -588,7 +604,7 @@ void menuFunction(struct stat sb,char *path)
             if(cpidLnk == 0)
             {
                 //Child code 
-               
+                
                 //Change the target file access rights
                 execlp("chmod","chmod","-v","760",path,NULL);
                  printf(RED"Not GOOOD" RESET);
@@ -626,6 +642,7 @@ void menuFunction(struct stat sb,char *path)
                 strcat(newFileName,"_file.txt");
                 strcat(newFileName,"\0");
                 //Increase the counter of children
+            
                 pidCounter++;
                 if(cpidDir == 0)
                 {
@@ -657,9 +674,9 @@ void menuFunction(struct stat sb,char *path)
         pidCounter++;
         if(pid == 0)
         {
-            printMenu(sb,path);
+            handleOptions(sb,path);
            
-        
+            exit(0);
         }
         
            //Wait for all childs
@@ -673,7 +690,7 @@ void menuFunction(struct stat sb,char *path)
             //Check the return value of wait function
             if (w == -1)
             {
-                //printf("waitpid status %d",status);
+                
                 exit(EXIT_FAILURE);
             }
             if (WIFEXITED(status)) 
