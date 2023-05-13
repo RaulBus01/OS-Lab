@@ -1,0 +1,3 @@
+In file: File4.c found  2 warnings 0 errors .The score is 8.00 
+In file: File4.c found  2 warnings 0 errors .The score is 8.00 
+In file: File4.c found  2 warnings 0 errors .The score is 8.00 

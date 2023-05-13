@@ -1,0 +1,331 @@
+Write a C program, which uses system calls and library functions in Unix, that takes multiple arguments representing paths to regular files
+ / directories / symbolic links.
+
+The program provides the following functionalities: 
+
+
+
+The program will pass through all the arguments
+
+For each file, depending on the file type, the name of the file and the type of the file will be displayed and after that
+ an interactive menu will be displayed, with all the options available for that specific file type.
+
+The user should then, input the desired options for that file from the keyboard, as a single string. 
+The options will be preceded by the ‘-’ sign and will contain multiple letters corresponding to each option. 
+An example input from the keyboard looks like this: -nal. Note that, some options may require additional input information. 
+
+After entering the options string, the information about that file will be printed to the standard output.
+
+If one of the letters of the string is not a valid option an error message will be displayed and the menu will appear again. 
+
+A) Regular file: name (-n), size (-d), hard link count (-h), time of last modification (-m), access rights (-a), create symbolic link (-l, this will wait for user input for the name of the link). The access rights will be displayed in the format:
+
+        User:
+
+        Read - yes
+        Write - yes
+        Exec - no
+
+        Group:
+
+        Read - yes
+        Write - no
+        Exec - no
+
+        Others:
+
+        Read - yes
+        Write - no
+        Exec - no
+
+B) Symbolic link: name (-n), delete symbolic link (-l), size of symbolic link (-d), size of target file (-t), access rights (-a). Note that if that the -l option is given, the other following options will no longer be performed
+
+C) Directory: name (-n), size (-d), access rights (-a), total number of files with the .c extension (-c)
+
+
+The parent process will create for each argument one child process that will handle the options introduced by the user 
+(for each file type we have the corresponding options). Additionally to this child process, the parent process will create a second child process, 
+whose functionality will be:
+
+If the argument is a regular file with the .c extension, the second child will execute a script. 
+The output data of the script will be send to the parent process which will compute a score based on number of errors and warnings
+0 errors and 0 warnings: 10
+
+at least one error: 1
+
+no errors, but more than 10 warnings: 2
+
+no errors, but maximum 10 warnings: 2 + 8*(10 – number_of_warnings)/10.
+
+The parent should write the following message in a file named grades.txt: "<FILE_NAME>: <SCORE>".
+
+Script requirement: Having a regular file with the .c extension given as argument, the script should compile the file and print at standard output 
+the number of errors and the number of warnings.
+If the argument is a regular file but doesn't have the .c extension, the second child should print the number of lines
+
+If the argument is a directory, the second child process will execute a command for creating a file with the .txt extension and a specific name (e.g. <dir_name>_file.txt, where <dir_name> is the name of the directory)
+
+If the argument is a symbolic link, the second child process will execute a command for changing the permissions of the symbolic link as it follows:
+
+read, write and execution rights for the user
+
+read and write rights for the group (no execution rights should be granted for the group of user!)
+
+no read, write or execution rights for other users
+
+The parent process must properly receive the return state of its child processes and print the following message "The process with PID <PID> has ended with the exit code <EXIT_CODE>".
+
+For each argument, the created processes must run in parallel with each other
+
+ 
+  DIR *dir;
+   regex_t extensionC;
+
+   int pfd[2];
+   int isCFile = 0;
+	
+       if (S_ISREG(sb.st_mode))
+        {
+          
+           
+           if(regcomp(&extensionC,".c$",REG_EXTENDED !=0))
+           {
+            printf(RED"Error compiling .c regular expression \n"RESET);
+            exit(EXIT_FAILURE);
+           }
+
+            //Regex to find the regular files that have .c extension
+           if(regexec(&extensionC,path, 0, NULL, 0) == 0)
+           {
+         
+	      
+            if(pipe(pfd)<0)
+            {
+                printf(RED"Pipe creation failed \n");
+                exit(1);
+            }
+              
+            //Create a child process
+              pid_t cpid = fork();// Pentru fork 2 e nevoide ce close la pipe
+            
+           
+               //Check if the fork function was called successfully
+              if(cpid == -1)
+                {
+                    perror(RED "Fork failure \n" RESET);
+                    exit(EXIT_FAILURE);
+                }
+                //Increase the counter of children
+                 pidCounter++;
+                 //Flag for checking if the file is a C file and to verify in the parent process
+                   isCFile = 1;
+              if(cpid == 0)
+              {
+                //close the reading end of the pipe
+                close(pfd[0]);
+                
+                //Redirect the information from STDOUT to pipe
+                int newfd = dup2(pfd[1],1);
+                // Check if the dup2 call is succesful
+                if(newfd < 0)
+                {
+                    printf(RED"Error dup2 \n");
+                    exit(1);
+                }
+               
+                //Call of  the script which write in the fileout.txt the errors and warnings from path
+                execlp("bash","bash","script.sh",path,"fileout.txt",NULL);
+
+                // Code executed if execlp is wrong
+                printf(RED"!GOOOD" RESET);
+                exit(1);
+                    
+              }
+                
+
+           }
+           
+           
+            
+        }
+ 
+
+        if(S_ISLNK(sb.st_mode))
+        {
+            
+          
+
+            pid_t cpidLnk = fork();
+               if(cpidLnk == -1)
+            {
+                printf(RED "Fork failure \n" RESET);
+                exit(EXIT_FAILURE);     
+            }
+            pidCounter++;
+            if(cpidLnk == 0)
+            {
+                //Child code 
+               
+                //Change the target file access rights
+                execlp("chmod","chmod","-v","760",path,NULL);
+                 printf(RED"Not GOOOD" RESET);
+                exit(1);
+            }
+
+          
+             
+
+        
+        }
+
+        if(S_ISDIR(sb.st_mode))
+        {
+            //Open the directory 
+                dir = opendir(path);
+            //Check if the directory was opened correctly
+                 if(dir == NULL)
+                {
+                    printf(RED "Error could not open the directory" RESET);
+                }
+                //Setting the right option for directory Menu
+              
+            
+                pid_t cpidDir = fork();
+                 //Check if the fork function was called successfully
+                if(cpidDir == -1)
+                {
+                    printf(RED "Fork failure \n" RESET);
+                    exit(EXIT_FAILURE);
+                }
+                //Obtain the name of the new file dirName_file.txt
+
+                char newFileName[255]="";
+                strcpy(newFileName,path);
+                strcat(newFileName,"_file.txt");
+                strcat(newFileName,"\0");
+                //Increase the counter of children
+                pidCounter++;
+                if(cpidDir == 0)
+                {
+                    // 2nd child process 
+
+                    //Call of  the script which create the file with the given name(newFileName)
+                    execlp("bash","bash","scriptDirFile.sh",newFileName,NULL);
+                   
+                    // Code executed if execlp is wrong
+                    printf(RED "Not GOOOD" RESET);
+                    exit(1);
+                   
+                }
+                  
+
+                
+              
+        }
+        //2nc child process to handle the options
+        pid_t pid = fork();
+       //Check if the fork function was called successfully
+        if(pid == -1)
+        {
+            printf(RED "Fork error \n" RESET);
+            exit(EXIT_FAILURE);
+
+        }
+        //Increase the counter of children
+        pidCounter++;
+        if(pid == 0)
+        {
+            
+            choiceFunction(sb,path);
+
+            // Check if the choice is valid
+            if(regexec(&extension,choice,0,NULL,0) != 0)
+            {
+                // Call the function that will print the invalid options
+            wrongOption(validCommands,choice);
+              // Reset the choice to empty string because the recurisve calls will print the choice again
+                strcpy(choice,"");
+                // Recursive call to the menu function
+                choiceFunction(sb,path);
+              
+            }
+            int i = 0;
+            while(choice[i] != '\0') 
+            {
+                //Apply the functions that were choosen
+                
+                // Regular File Functions
+                regularFile(i,sb,path);
+
+                
+                // Link File Function
+                linkFile(i,sb,path);
+
+                // Directory File Function
+
+                directoryFile(i,sb,path,dir);
+        
+                i++;
+        
+            }
+           
+        }
+        else
+        {   
+
+            //If the file is a C file then
+            if(isCFile == 1)
+            {
+                //Close the writing end of the pipe
+                close(pfd[1]);
+                //Buffer for the data from the reading end of the pipe
+                char buff[512],*ptr;
+                //Number of errors and warnings to be extracted from the buffer
+                int nrErrors,nrWarnings;
+                //Assign the number of readed bytes
+                int nrBytesRead = read(pfd[0],buff,512);
+                if(nrBytesRead > 0)
+                {
+                    //Termiante the string at the numbero of readed bytes
+                    buff[nrBytesRead]='\0'; 
+                    //Extract the numbers for erros and warnings in base 10
+                    nrErrors = strtol(buff, &ptr, 10);
+                    nrWarnings = strtol(ptr, NULL, 10);
+                    //Get the score using the function
+                    double score = getScore(nrWarnings,nrErrors);
+                    //Print the Number of Warnings and Errors and the score
+                   FILE *fp = fopen("grades.txt","a");
+                        if (fp == NULL) 
+                        {
+                            printf(RED "Error opening file for appending\n" RESET);
+                            exit(EXIT_FAILURE);
+                        }
+                        fprintf(fp,"File %s has Warnings -> %d Errors -> %d and obtained the ",path,nrWarnings,nrErrors);
+                        fprintf(fp,"score: %.2f \n",score );
+                        fclose(fp);
+
+
+                
+                }
+            
+           else if (nrBytesRead == 0) //Check the special case
+            {
+                // The child process has closed the write end of the pipe
+                printf("Pipe closed by child process\n");
+            }
+            else //Check the special case
+            {
+                // There was an error reading from the pipe
+                printf(RED"Error reading from pipe\n");
+                exit(EXIT_FAILURE);
+            }
+            //Close the reading end of the pipe
+            close(pfd[0]);
+                  isCFile = 0;
+            }
+           
+            
+         
+            
+           
+           

@@ -25,19 +25,22 @@
 
 char choice[32];
 char path[256];
+char *validCommands;
 
 int nrFiles = 0;
-
+int optionForMenu = 0;
 int pidCounter = 0;
+int deleteLink = 0;
+ regex_t extension;
 
 int ParseFileInDir(DIR *dir)
 {
   int counter = 0;
   struct dirent *entry;
   struct stat file;
-  regex_t extension;
+  regex_t extensionDir;
 
-    if(regcomp(&extension, ".c$", REG_EXTENDED))
+    if(regcomp(&extensionDir, ".c$", REG_EXTENDED))
     {
         printf( RED "Error compiling the regular expression\n" RESET);
         exit(EXIT_FAILURE);
@@ -67,11 +70,7 @@ int ParseFileInDir(DIR *dir)
         
         }
     }
-   
 
-    
-        
-    
   }
    closedir(dir);   
    return counter;  
@@ -142,81 +141,68 @@ void accessRights(struct stat sb)
 
     
 }
-void regularFile(struct stat sb, char *fileName,char *options)
+void regularFile(int i, struct stat sb, char *fileName)
 {
+    if ( i!=0  && S_ISREG(sb.st_mode))
+    {
 
-  
-    for(int i=1;i<strlen(options);i++)
-    {
-    printf(GRN);
-    switch(options[i])
-    {
-        case 'n':
-            printf("File name : %s \n",fileName);
-            printf(RESET);
-            break;
-        case 'd':
-            printf("Size  %ld \n",sb.st_size);
-            printf(RESET);
-            break;
-        case 'h':
-            
-            printf( "Number of hard links   %ld\n",sb.st_nlink);
-            printf(RESET);
-            break;
-        case 'm':
-            printf("Time of last modification %s",ctime(&sb.st_atime));
-            printf(RESET);
-            break;
-        case 'a':
-            printf(RESET);
-            accessRights(sb);
-            break;
-        case 'l':
-            printf("Introduce the name of the new link :\n");
-            char link[100];
-            if(scanf("%s",link) < 0 )
-            {
-                printf(RED"Error scanf \n");
+        printf(GRN);
+        switch(choice[i])
+        {
+            case 'n':
+                printf("File name : %s \n",fileName);
                 printf(RESET);
-            }
-            
-            if(symlink(fileName,link) == -1)
-            {
-                printf(RED "Error creating the link\n" RESET);
+                break;
+            case 'd':
+                printf("Size  %ld \n",sb.st_size);
+                 printf(RESET);
+                break;
+            case 'h':
                 
-            }
-            else
-            {
+                printf( "Number of hard links   %ld\n",sb.st_nlink);
+                printf(RESET);
+                break;
+            case 'm':
+                printf("Time of last modification %s",ctime(&sb.st_atime));
+                printf(RESET);
+                break;
+            case 'a':
+                printf(RESET);
+                accessRights(sb);
+                break;
+            case 'l':
+                printf("Introduce the name of the new link :\n");
+                char link[100];
+                if(scanf("%s",link) < 0 )
+                {
+                    printf(RED"Error scanf \n");
+                    printf(RESET);
+                }
                 
+                if(symlink(fileName,link) == -1)
+                {
+                    printf(RED "Error creating the link" RESET);
+                    exit(EXIT_FAILURE);
+                }
                 printf(GRN "Link created successfully\n" RESET);
 
-            }
-
-            break;
-        default:
-           printf("Invalid Operation %c\n",choice[i]);
-            printf(RESET);
-        
-            break;
-            
+                break;
+            default:
+                printf(RED "Invalid Operation %c\n",choice[i]);
+                printf(RESET);
+               
+                break;
                 
         }
     }
 }
-void linkFile(struct stat sb, char *fileName,char *options)
+void linkFile(int i, struct stat sb, char *fileName)
 {
-    int deleteLink =0;
-
-    for(int i=1;i<strlen(options)  ;i++)
+    if(i!=0 && S_ISLNK(sb.st_mode) && deleteLink == 0)
     {
-        if(deleteLink == 1)
-        {
-            printf(RED "Link was deleted\n");
-            break;
-        }
+    
         printf(GRN);
-        switch(options[i])
+        switch(choice[i])
         {
 
             case 'n':
@@ -225,9 +211,11 @@ void linkFile(struct stat sb, char *fileName,char *options)
                 break;
             case 'l':
                 unlink(fileName);   
-                deleteLink =1;
                 printf("Deleting the link : %s\n",fileName);
+
                  printf(RESET); 
+                 deleteLink =1;
+                 return ;
                 break;
             case 'd':
                 printf("Size of the link %ld \n",sb.st_size);
@@ -252,21 +240,24 @@ void linkFile(struct stat sb, char *fileName,char *options)
                  printf(RESET);
                 break;
         }
-    
     }
+   if(deleteLink == 1)
+   {
+    printf(RED"Link was deleted can't perform other operations \n");
+    printf(RESET);
+    deleteLink++;
+   }
 }
-void directoryFile(char *options,struct stat sb,char *fileName, DIR *dir)
+void directoryFile(int i,struct stat sb,char *fileName, DIR *dir)
 {
    
     int nrCFiles=0;
 
 
-    for(int i=1;i<strlen(options);i++)
-    {
-
     
-        printf(GRN);
-            switch (options[i])
+     if(i!= 0 && S_ISDIR(sb.st_mode))
+        {printf(GRN);
+            switch (choice[i])
             {
                 
             case 'n':
@@ -291,125 +282,103 @@ void directoryFile(char *options,struct stat sb,char *fileName, DIR *dir)
             printf(RESET);
                 break;
             default:
-                printf(RED "!Invalid option %c\n",choice[i]);
+                printf(RED "Invalid option %c\n",choice[i]);
                  printf(RESET);
                 break;
             }
-    }
+        }
 }
-int checkOptions(struct stat sb, char *options)
+void wrongOption(char *validCommands,char *choice)
 {
-    int i=1;
-    if(options[0] != '-')
-    {
-        printf(RED"Invalid option\n");
-        printf(RED"Options must start with -\n"RESET);
-        return 0;
-    }
+     int charIndex = 1;
+     //Check if the first character is a dash if not print the error message
+     if(choice[0] !='-')
+        {
+            printf(RED "\nTry -%s \n \n",choice);
+            printf(RESET);
+            return;
+        }
+        //Check if the option is valid if not print the specific option that is invalid
+    while(choice[charIndex]!='\0')
+        {
+            if(strchr(validCommands,choice[charIndex]) == NULL)
+            {
+                printf(RED "Invalid option: %c \n",choice[charIndex]);
+                printf(RESET);
+            }
+            charIndex++;
+        }
+        printf("\n");
+}
+void choiceFunction(struct stat sb,char* path)
+{
     if(S_ISREG(sb.st_mode))
     {
-        while(options[i] != '\0')
-        {
-            if(options[i] != 'n' && options[i] != 'd' && options[i] != 'h' && options[i] != 'm' && options[i] != 'a' && options[i] != 'l')
+     
+        validCommands = "ndhmal";
+    
+          if(regcomp(&extension,"^-[ndhmal]+$",REG_EXTENDED) != 0)
             {
-                printf(RED"Invalid option %c\n",options[i]);
-                return 0;
+                
+                printf(RED "Error compiling the regular expression \n" RESET);
+                exit(EXIT_FAILURE);
             }
-            i++;
-        }
+        regFileMenu(sb,path);
     }
     if(S_ISLNK(sb.st_mode))
     {
-        while(options[i] != '\0')
-        {
-            if(options[i] != 'n' && options[i] != 'l' && options[i] != 'd' && options[i] != 't' && options[i] != 'a')
+        validCommands = "nldta";
+        deleteLink = 0;
+          //Compile the regular expression for the link
+            if(regcomp(&extension,"^-[nldta]+$",REG_EXTENDED) != 0)
             {
-                printf(RED"Invalid option %c\n",options[i]);
-                return 0;
+                
+                printf(RED "Error compiling the regular expression" RESET);
+                exit(EXIT_FAILURE);
             }
-            i++;
-        }
+             
+
+        symFileMenu(sb,path);
     }
     if(S_ISDIR(sb.st_mode))
     {
-        while(options[i] != '\0')
-        {
-            if(options[i] != 'n' && options[i] != 'd' && options[i] != 'a' && options[i] != 'c')
-            {
-                printf(RED"Invalid option %c\n",options[i]);
-                return 0;
-            }
-            i++;
-        }
-    }
-    return 1;
-    
-}
-void printMenu(struct stat sb,char *fileName)
-{
-    char options[100];
-    if(S_ISREG(sb.st_mode))
-    {
-        regFileMenu(sb,fileName);
-    }
-   
-    if(S_ISLNK(sb.st_mode))
-    {
-        symFileMenu(sb,fileName);
-    }
-     if(S_ISDIR(sb.st_mode))
-    {
+
+        validCommands = "ndac";
         DIR *dir;
-        if((dir = opendir(path)) == NULL)
+        //Open the directory 
+          dir = opendir(path);
+        //Check if the directory was opened correctly
+            if(dir == NULL)
         {
-            printf(RED "Error opening the directory\n");
-            printf(RESET);
-            exit(EXIT_FAILURE);
+            printf(RED "Error could not open the directory" RESET);
         }
+           //Compile the regular expression for the directory
+         if(regcomp(&extension,"^-[ndac]+$",REG_EXTENDED) != 0)
+                {
+                    
+                    printf(RED "Error compiling the regular expression\n" RESET);
+                    exit(EXIT_FAILURE);
+                }
 
-        dirFileMenu(dir,fileName);
+        dirFileMenu(dir,path);
+
+        closedir(dir);
+       
     }
-    sleep(1);
-    
-    printf(BLU"Enter your options : "RESET);
-    scanf("%s",options);
-    system("clear");
-    printf(GRN"\nOptions : %s\n",options);
-    printf(RESET);
+    // Get the choice from the user 
+        printf("\n"BLU);
+        printf("Enter your choice:" RESET);
+        sleep(1);
+        scanf("%s",choice);
+        
+        // Clear the screen for a better user experience 
+        system("clear");
+        
 
-    if(checkOptions(sb,options) == 0)
-    {
-        printMenu(sb,fileName);
-        strcpy(options,"");
-    }
-    else
-    {
-        if(S_ISREG(sb.st_mode))
-        {
-            regularFile(sb,fileName,options);
-        }
-        if(S_ISLNK(sb.st_mode))
-        {
-           linkFile(sb,fileName,options);
-        }
-        if(S_ISDIR(sb.st_mode))
-        {
-            DIR *dir;
-            if((dir = opendir(path)) == NULL)
-            {
-                printf(RED "Error opening the directory\n");
-                printf(RESET);
-                exit(EXIT_FAILURE);
-            }
-
-            directoryFile(options,sb,fileName,dir);
-        }
-      
-    }
-
-
-
+        printf(BLU"Your choice %s  \n",choice);
+        printf(RESET);
 }
+
 double getScore(int nrWarnings, int nrErrors)
 {   int score = 0;
     if(nrWarnings == 0 && nrWarnings == 0)
@@ -431,21 +400,21 @@ double getScore(int nrWarnings, int nrErrors)
     }
     return score;
 }
-
 void menuFunction(struct stat sb,char *path)
 {
    
-   DIR *dir;
-   regex_t extensionC;
-  
+  DIR *dir;
+   regex_t extension,extensionC;
+
    int pfd[2];
    int isCFile = 0;
 	
-   
+    //Option for menu: 1 for Regular File | 2 for Symbolic Link File | 3 for Directory file
 
         if (S_ISREG(sb.st_mode))
         {
-            
+            //Setting the right option for regular File Menu
+           optionForMenu = 1; 
            
            if(regcomp(&extensionC,".c$",REG_EXTENDED !=0))
            {
@@ -500,76 +469,19 @@ void menuFunction(struct stat sb,char *path)
                 exit(1);
                     
               }
-               if(isCFile == 1)
+                
+
+           }
+           
+      
+
+            //Compile the regular expression for the regular file
+            if(regcomp(&extension,"^-[ndhmal]+$",REG_EXTENDED) != 0)
             {
-                //Close the writing end of the pipe
-                if(close(pfd[1]) < 0)
-                {
-                    printf(RED"Error closing the pipe \n"RESET);
-                    exit(1);
-                }
-                //Buffer for the data from the reading end of the pipe
-                char buff[512],*ptr,ch[1];
-                //Number of errors and warnings to be extracted from the buffer
-                int nrErrors,nrWarnings;
-                //Assign the number of readed bytes
-                int nrBytesRead = 0;
-                while(read(pfd[0],ch,1) > 0)
-                {
-                    buff[nrBytesRead] = ch[0];
-                    nrBytesRead++;
-                }
-                if(nrBytesRead > 0)
-                {
-                    //Termiante the string at the numbero of readed bytes
-                    buff[nrBytesRead] = '\0';
-                    printf("buff : %s \n",buff);
-                    //Extract the numbers for erros and warnings in base 10
-                    nrErrors = strtol(buff, &ptr, 10);
-                    nrWarnings = strtol(ptr, NULL, 10);
-                    //Get the score using the function
-                    double score = getScore(nrWarnings,nrErrors);
-                    //Print the Number of Warnings and Errors and the score
-                    FILE *f = fopen("grades.txt","a");
-                    fprintf(f,"In file: %s found  %d warnings %d errors .The score is %.2f \n",path,nrWarnings,nrErrors,score);
-                   
-                    fclose(f);
-
                 
-                }
-            
-          
-                //Close the reading end of the pipe
-                if(close(pfd[0]) < 0)
-                {
-                    printf(RED"Error closing the pipe \n"RESET);
-                    exit(1);
-                
-                }
+                printf(RED "Error compiling the regular expression \n" RESET);
+                exit(EXIT_FAILURE);
             }
-                
-
-           }
-           else
-           {
-                pid_t cpidReg = fork();
-                if(cpidReg == -1)
-                {
-                    printf(RED "Fork failure \n" RESET);
-                    exit(EXIT_FAILURE);     
-                }
-                pidCounter++;
-                if(cpidReg == 0)
-                {
-                    //Child code 
-                    //Change the regular file access rights
-                    execlp("bash","bash","scriptLines.sh",path,NULL);
-                    printf(RED"Not GOOOD" RESET);
-                    exit(1);
-                }
-           }
-           
-           
             
         }
  
@@ -577,7 +489,11 @@ void menuFunction(struct stat sb,char *path)
         if(S_ISLNK(sb.st_mode))
         {
             
-          
+             //Setting the right option for symbolic Link Menu
+            optionForMenu = 2;
+            //Assign the valid commands for the link
+         
+
             pid_t cpidLnk = fork();
                if(cpidLnk == -1)
             {
@@ -595,7 +511,14 @@ void menuFunction(struct stat sb,char *path)
                 exit(1);
             }
 
-           
+            //Compile the regular expression for the link
+            if(regcomp(&extension,"^-[nldta]+$",REG_EXTENDED) != 0)
+            {
+                
+                printf(RED "Error compiling the regular expression" RESET);
+                exit(EXIT_FAILURE);
+            }
+             
 
         
         }
@@ -610,7 +533,7 @@ void menuFunction(struct stat sb,char *path)
                     printf(RED "Error could not open the directory" RESET);
                 }
                 //Setting the right option for directory Menu
-               
+                optionForMenu = 3;
             
                 pid_t cpidDir = fork();
                  //Check if the fork function was called successfully
@@ -641,10 +564,18 @@ void menuFunction(struct stat sb,char *path)
                 }
                   
 
-               
+                //Assign the valid commands for the directory
+        
+                //Compile the regular expression for the directory
+                 if(regcomp(&extension,"^-[ndac]+$",REG_EXTENDED) != 0)
+                {
+                    
+                    printf(RED "Error compiling the regular expression\n" RESET);
+                    exit(EXIT_FAILURE);
+                }
               
         }
-        // child to handle the options
+        //2nc child process to handle the options
         pid_t pid = fork();
        //Check if the fork function was called successfully
         if(pid == -1)
@@ -657,11 +588,94 @@ void menuFunction(struct stat sb,char *path)
         pidCounter++;
         if(pid == 0)
         {
-            printMenu(sb,path);
-           
+            
+            choiceFunction(sb,path);
+
+            // Check if the choice is valid
+            if(regexec(&extension,choice,0,NULL,0) != 0)
+            {
+                // Call the function that will print the invalid options
+            wrongOption(validCommands,choice);
+                // Recursive call to the menu function
+                menuFunction(sb,path);
+                // Reset the choice to empty string because the recurisve calls will print the choice again
+                strcpy(choice,"");
+            }
+            int i = 0;
+            while(choice[i] != '\0') 
+            {
+                //Apply the functions that were choosen
+                
+                // Regular File Functions
+                regularFile(i,sb,path);
+
+                
+                // Link File Function
+                linkFile(i,sb,path);
+
+                // Directory File Function
+
+                directoryFile(i,sb,path,dir);
         
+                i++;
+        
+            }
+            exit(1);
         }
-        
+        else
+        {   
+
+            //If the file is a C file then
+            if(isCFile == 1)
+            {
+                //Close the writing end of the pipe
+                close(pfd[1]);
+                //Buffer for the data from the reading end of the pipe
+                char buff[512],*ptr;
+                //Number of errors and warnings to be extracted from the buffer
+                int nrErrors,nrWarnings;
+                //Assign the number of readed bytes
+                int nrBytesRead = read(pfd[0],buff,512);
+                if(nrBytesRead > 0)
+                {
+                    //Termiante the string at the numbero of readed bytes
+                    buff[nrBytesRead]='\0'; 
+                    //Extract the numbers for erros and warnings in base 10
+                    nrErrors = strtol(buff, &ptr, 10);
+                    nrWarnings = strtol(ptr, NULL, 10);
+                    //Get the score using the function
+                    double score = getScore(nrWarnings,nrErrors);
+                    //Print the Number of Warnings and Errors and the score
+                    printf(RED"Warnings -> %d Errors -> %d \n",nrWarnings,nrErrors);
+                    printf(GRN"Your score: %.2f \n",score );
+                    printf(RESET);
+
+                
+                }
+            
+           else if (nrBytesRead == 0) //Check the special case
+            {
+                // The child process has closed the write end of the pipe
+                printf("Pipe closed by child process\n");
+            }
+            else //Check the special case
+            {
+                // There was an error reading from the pipe
+                printf(RED"Error reading from pipe\n");
+                exit(EXIT_FAILURE);
+            }
+            //Close the reading end of the pipe
+            close(pfd[0]);
+            
+            }
+           
+            
+         
+            
+           
+           
+
+           
            //Wait for all childs
            for(int k = 0; k <pidCounter;k++)
            {
@@ -678,7 +692,7 @@ void menuFunction(struct stat sb,char *path)
             }
             if (WIFEXITED(status)) 
             {
-                printf(GRN"The process with PID  <%d> has ended with the  status=%d\n",w, WEXITSTATUS(status));
+                printf(GRN"Exited  %d with the  status=%d\n",w, WEXITSTATUS(status));
                 printf(RESET);
              } 
              else if (WIFSIGNALED(status)) 
@@ -703,8 +717,10 @@ void menuFunction(struct stat sb,char *path)
            pidCounter=0;
 
              
+        }
+             
         
-
+        
     
 }
 int main(int argc, char *argv[])
@@ -724,8 +740,7 @@ int main(int argc, char *argv[])
         // Check if the path is a valid file
         if (lstat(argv[i], &sb) == -1) 
         {
-            printf(RED "File '%s' not exist \n",argv[i]);
-            printf(RESET);
+            printf(RED "File not exist \n" RESET);
             
             exit(EXIT_FAILURE);
         }
